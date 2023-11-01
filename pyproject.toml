@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["polkel <104925382+polkel@users.noreply.github.com>"]
 readme = "README.md"
+packages = [{include = "aoc2022"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
