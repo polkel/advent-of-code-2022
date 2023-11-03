@@ -34,3 +34,18 @@ def create_new_day(day_num: int):
             file.write("def main():\n")
             file.write("    pass\n")
         print("New directory created successfully!\n\n")
+
+
+def exception_handler(exception_item):
+    print("Error in tests\n\n")
+    tb = exception_item.__traceback__
+    file_name = ""
+    line_num = ""
+    func_name = ""
+    while tb is not None:
+        file_name = tb.tb_frame.f_code.co_filename
+        func_name = tb.tb_frame.f_code.co_name
+        line_num = tb.tb_lineno
+        tb = tb.tb_next
+    print(type(exception_item).__name__, exception_item)
+    print(file_name, func_name, f"line {line_num}\n\n")
