@@ -16,16 +16,21 @@ def test_problem():
     try:
         test_pipeline = Pipeline(test_file, 30)
         test_pipeline.extract_valves()
-        for valve in test_pipeline.valves.values():
-            print(f"{valve} has neighbors {valve.neighbors.values()}\nand a flow rate of {valve.flow_rate}")
-            if valve.flow_rate != 0:
-                print(f"The release array is {valve.pressure_released}")
-            print()
-        print(f"The max number of valves to open is {test_pipeline.to_open}")
-        print(f"The number of total valves in the pipeline is {len(test_pipeline.all_valves_set)}")
-        start_valve = test_pipeline.valves["AA"]
-        max_pressure = test_pipeline.dfs_max_pressure(start_valve, 0, set(), set(), [])
-        print(max_pressure)
+        # for valve in test_pipeline.valves.values():
+        #     print(f"{valve} has neighbors {valve.neighbors.values()}\nand a flow rate of {valve.flow_rate}")
+        #     if valve.flow_rate != 0:
+        #         print(f"The release array is {valve.pressure_released}")
+        #     print()
+        # print(f"The valves to open is {test_pipeline.to_open}")
+        test_pipeline.bfs_adjacency()
+        # for valve, adjacency in test_pipeline.adjacency.items():
+        #     print(f"Adjacency matrix for {valve}")
+        #     for dest_valve, value in adjacency.items():
+        #         print(f"{dest_valve}: {value} ", end="")
+        #     print("\n")
+        max_pressure = test_pipeline.dfs_max(test_pipeline.valves["AA"], 0, set())
+        # print(max_pressure)
+        assert max_pressure == 1651
     except Exception as e:
         exception_handler(e)
 
@@ -52,7 +57,12 @@ def solve_problem():
     # Open valves(this needs to be copied in recursion), time limit, and curr_time
     # Needs to evaluate results for passing to every neighboring valve or opening current valve
     # Can only open current valve if valve flow rate > 0 and its not in the open valves set
-    pass
+    pipeline = Pipeline(input_file, 30)
+    pipeline.extract_valves()
+    pipeline.bfs_adjacency()
+    max_pressure = pipeline.dfs_max(pipeline.valves["AA"], 0, set())
+    print_to_display(f"The most pressure I can release is {str(max_pressure)} in 30 minutes", bold=True)
+    print("\n\n")
 
 
 class Valve:
@@ -102,11 +112,12 @@ class Pipeline:
         self.valves = dict()
         self.valve_name_re = re.compile(r"(?<=Valve )[A-Z]{2}")
         self.flow_re = re.compile(r"(?<=rate=)\d+")
-        self.to_open = 0
-        self.all_valves_set = None
         # I edited a few lines in the input to make this work
         # Some of the singular connections just say valve, the lookbehind cannot be of variable size
         self.neighbors_re = re.compile(r"(?<=valves ).+$")
+        self.to_open = set()
+        self.fw_template = dict()
+        self.adjacency = None
 
     def extract_valves(self):
         with open(self.file_path, "r") as file:
@@ -135,14 +146,53 @@ class Pipeline:
                     self.valves[valve_name] = curr_valve
                 curr_valve.create_release_array(self.time_limit)
                 if int(flow_rate) > 0:
-                    self.to_open += 1
-        self.all_valves_set = set(self.valves.values())
+                    self.to_open.add(curr_valve)
+                self.fw_template[valve_name] = None
 
+    def bfs_adjacency(self):
+        self.adjacency = dict()
+        for valve_name, valve in self.valves.items():
+            visited = set()
+            adjacency_copy = self.fw_template.copy()
+            curr_depth = set()
+            curr_depth.add(valve)
+            visited.add(valve)
+            depth = 0
+            while len(curr_depth) > 0:
+                next_depth = set()
+                for item in curr_depth:
+                    adjacency_copy[item.name] = depth
+                    not_visited = []
+                    for neighbor in item.neighbors.values():
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            not_visited.append(neighbor)
+                    next_depth.update(not_visited)
+                depth += 1
+                curr_depth = next_depth
+            self.adjacency[valve_name] = adjacency_copy
+
+    def dfs_max(self, valve: Valve, curr_time: int, open_set: set):
+        remaining_to_open = self.to_open.difference(open_set)
+        pressures = [0]
+        for item in remaining_to_open:
+            open_time = curr_time + self.adjacency[valve.name][item.name]
+            new_time = open_time + 1
+            if open_time >= self.time_limit - 1:
+                continue
+            pressure = item.pressure_released[open_time]
+            new_open = open_set.copy()
+            new_open.add(item)
+            pressure += self.dfs_max(item, new_time, new_open)
+            pressures.append(pressure)
+        return max(pressures)
+
+    # The below dfs_max_pressure function is a mistake, but I am keeping it there as a reminder
     def dfs_max_pressure(self, valve: Valve, curr_time: int, open_set: set, visited: set, path: list):
         # Add a visited set
         # Influence path to go to non-visited unless it has all been visited
         # break if everything has been visited
-        # TODO Floyd-Warshal implementation... only visit unopened valves and stop when all valves are open or timeout
+        # TODO BFS implementation for shortest path...
         new_path = path[:]
         new_path.append(valve.name)
         repeat_path = False
@@ -173,8 +223,4 @@ class Pipeline:
         for neighbor in to_traverse:
             pressures.append(self.dfs_max_pressure(neighbor, next_time, open_set, new_visited, new_path))
         max_pressure = max(pressures)
-        # if curr_time % 10 == 0:
-        if new_path == ["AA", "DD", "DD", "CC", "BB", "BB", "AA", "II", "JJ", "JJ", "II", "AA", "DD", "EE", "FF", "GG", "HH", "HH", "GG", "FF", "EE", "EE", "DD", "CC", "CC"]:
-            print(curr_time, open_set)
-            print(max_pressure)
         return max_pressure
