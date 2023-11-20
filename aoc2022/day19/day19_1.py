@@ -126,7 +126,9 @@ class Blueprint:
         self.raw_text = raw_text.strip()
         self.robot_re = re.compile(r"(?<=Each ).+(?= costs)")
         self.ingredients_re = re.compile(r"(?<=costs ).+")
+        self.robot_limit = None
         self.get_recipes()
+        self.get_robot_limit()
 
     def get_recipes(self):
         robots = self.raw_text.split(". ")
@@ -141,6 +143,19 @@ class Blueprint:
                 num, resource = ingredient.split()
                 curr_req.add_item(resource, int(num))
             setattr(self, robot_type, curr_req)
+
+    def get_robot_limit(self):
+        maxes = Inventory(0, 0, 0, 0)
+        all_recipes = [
+            self.ore_robot,
+            self.clay_robot,
+            self.obsidian_robot,
+            self.geode_robot]
+        for recipe in all_recipes:
+            for resource in resources_priority:
+                if getattr(maxes, resource) < getattr(recipe, resource):
+                    setattr(maxes, resource, getattr(recipe, resource))
+        self.robot_limit = maxes
 
     def __str__(self):
         blueprint_str = "Blueprint Recipes\n"
@@ -191,6 +206,46 @@ def get_robot_to_build(blueprint: Blueprint, inventory: Inventory, robots: Inven
     return add_robot
 
 
+def optimal_blueprint(blueprint: Blueprint, minutes: int, depth_list: list, visited: set):
+    print(f"Minute: {minutes}")
+    print(f"Depth length: {len(depth_list)}")
+    if minutes == 0:
+        pair_index = return_most_geodes_index(depth_list)
+        return depth_list[pair_index]
+    new_depth = []
+    for pair in depth_list:
+        inventory, robots = pair.inventory, pair.robots
+        build_list = get_all_robots_to_make(blueprint, inventory, robots)
+        next_inventory = inventory.make_copy()
+        next_inventory.add_inventory(robots)
+        if build_list == ["geode"]:
+            inventory_copy = next_inventory.make_copy()
+            robot_copy = robots.make_copy()
+            inventory_copy.sub_inventory(blueprint.geode_robot)
+            robot_copy.add_item("geode", 1)
+            new_pair = InvRobotPair(inventory_copy, robot_copy)
+            if new_pair not in visited:
+                visited.add(new_pair)
+                new_depth.append(new_pair)
+            continue
+        new_pair = InvRobotPair(next_inventory, robots)
+        if new_pair not in visited:
+            visited.add(new_pair)
+            new_depth.append(InvRobotPair(next_inventory, robots))
+        else:
+            continue
+        for build in build_list:
+            inventory_copy = next_inventory.make_copy()
+            robot_copy = robots.make_copy()
+            inventory_copy.sub_inventory(getattr(blueprint, build + "_robot"))
+            robot_copy.add_item(build, 1)
+            new_pair = InvRobotPair(inventory_copy, robot_copy)
+            if new_pair not in visited:
+                visited.add(new_pair)
+                new_depth.append(new_pair)
+    return optimal_blueprint(blueprint, minutes - 1, new_depth, visited)
+
+
 def get_optimal_inv_blueprint(blueprint: Blueprint, minutes: int, depth_list: list, visited: set):
     # depth_list is a list of lists
     # each list within is a pair of inventory and number of robots for that given minute
@@ -202,7 +257,6 @@ def get_optimal_inv_blueprint(blueprint: Blueprint, minutes: int, depth_list: li
         pair_index = return_most_geodes_index(depth_list)
         return depth_list[pair_index]
     new_depth = []  # Need to change this to a set
-    max_geodes = 0
     for pair in depth_list:  # already changed this for pair
         inventory, robots = pair.inventory, pair.robots
         next_inventory = inventory.make_copy()
@@ -235,12 +289,17 @@ def get_optimal_inv_blueprint(blueprint: Blueprint, minutes: int, depth_list: li
     return get_optimal_inv_blueprint(blueprint, minutes - 1, new_depth, visited)
 
 
-def get_all_robots_to_make(blueprint: Blueprint, inventory: Inventory):
+def get_all_robots_to_make(blueprint: Blueprint, inventory: Inventory, robots: Inventory):
     # Returns list of all possible robots that can be made from inventory
     robots_to_make = []
+    robo_limit = blueprint.robot_limit
     for resource in resources_priority:
+        if getattr(robo_limit, resource) <= getattr(robots, resource) and resource != "geode":
+            continue
         if inventory.in_inventory(getattr(blueprint, resource + "_robot")):
             robots_to_make.append(resource)
+            if resource == "geode":
+                break
     return robots_to_make
 
 
@@ -282,6 +341,6 @@ def get_quality_level_sum(blueprint_list: list, time_limit: int):
         visited = set()
         first_pair = InvRobotPair(Inventory(0, 0, 0, 0), Inventory(1, 0, 0, 0))
         visited.add(first_pair)
-        result_pair = get_optimal_inv_blueprint(blueprint, time_limit, [first_pair], visited)
+        result_pair = optimal_blueprint(blueprint, time_limit, [first_pair], visited)
         q_level += result_pair.inventory.geode * (i + 1)
     return q_level
