@@ -48,6 +48,9 @@ def solve_problem():
     # We have to BFS this I think
     # Branching every time there is a decision to make a robot or not
     # I am now sad
+    # TODO get rid of the false assumptions, max geode number is typically not indicative
+    # TODO get a do not build list based on max resource required for building, have it persist?
+    # TODO always check if you can build a geode bot first in every depth and just have it build it if you can
     blueprints = get_all_blueprints(input_file)
     q_level = get_quality_level_sum(blueprints, 24)
     print_to_display(f"The resulting sum of quality levels is {str(q_level)}", bold=True)
