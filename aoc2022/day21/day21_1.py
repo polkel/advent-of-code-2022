@@ -38,7 +38,7 @@ class MonkeyBusiness:
         self.monkey_dict = dict()
 
     def unpack(self, var_str):
-        if isinstance(self.monkey_dict[var_str], int):
+        if isinstance(self.monkey_dict[var_str], int) or isinstance(self.monkey_dict[var_str], float):
             return self.monkey_dict[var_str]
         else:
             return self.monkey_dict[var_str][0](*self.monkey_dict[var_str][1])
